@@ -79,6 +79,11 @@ abstract class EntityDisplayBase extends ConfigEntityBase implements EntityDispl
   protected $hidden = array();
 
   /**
+   * The renderer objects used for this display, keyed by component name.
+   */
+  protected $renderers = array();
+
+  /**
    * The original view or form mode that was requested (case of view/form modes
    * being configured to fall back to the 'default' display).
    *
@@ -115,6 +120,18 @@ abstract class EntityDisplayBase extends ConfigEntityBase implements EntityDispl
   protected $renderer;
 
   /**
+   * A mapping of display elements and its corresponding handler.
+   */
+  protected $handlers;
+
+  /**
+   * The display component handler plugin manager.
+   *
+   * @var \Drupal\Core\Entity\DisplayComponentHandlerPluginManager
+   */
+  protected $handlerManager;
+
+  /**
    * {@inheritdoc}
    */
   public function __construct(array $values, $entity_type) {
@@ -137,6 +154,8 @@ abstract class EntityDisplayBase extends ConfigEntityBase implements EntityDispl
     }
 
     parent::__construct($values, $entity_type);
+
+    $this->handlerManager = \Drupal::service('plugin.manager.entity.display_component_handler');
 
     $this->originalMode = $this->mode;
 
@@ -321,13 +340,14 @@ abstract class EntityDisplayBase extends ConfigEntityBase implements EntityDispl
    */
   public function toArray() {
     $properties = parent::toArray();
-    // Do not store options for fields whose display is not set to be
-    // configurable.
-    foreach ($this->getFieldDefinitions() as $field_name => $definition) {
-      if (!$definition->isDisplayConfigurable($this->displayContext)) {
-        unset($properties['content'][$field_name]);
-        unset($properties['hidden'][$field_name]);
-      }
+
+    // Let the component handlers add missing components.
+    if (!$this->handlerManager) {
+      $this->handlerManager = \Drupal::service('plugin.manager.entity.display_component_handler');
+    }
+    $handlers = $this->handlerManager->getDefinitions();
+    foreach (array_keys($handlers) as $type) {
+      $properties = $this->getComponentHandler($type)->massageOut($properties);
     }
 
     return $properties;
@@ -366,16 +386,20 @@ abstract class EntityDisplayBase extends ConfigEntityBase implements EntityDispl
       $options['weight'] = isset($max) ? $max + 1 : 0;
     }
 
-    // For a field, fill in default options.
-    if ($field_definition = $this->getFieldDefinition($name)) {
-      $options = $this->pluginManager->prepareConfiguration($field_definition->getType(), $options);
+    // Massage in some values.
+    $handler = $this->getComponentHandlerByElementName($name);
+    if ($handler) {
+      $options = $handler->massageIn($name, $options);
     }
 
     // Ensure we always have an empty settings and array.
     $options += ['settings' => [], 'third_party_settings' => []];
 
     $this->content[$name] = $options;
+
+    // Unset these to ensure new settings are picked up.
     unset($this->hidden[$name]);
+    unset($this->renderers[$name]);
     unset($this->plugins[$name]);
 
     return $this;
@@ -593,6 +617,71 @@ abstract class EntityDisplayBase extends ConfigEntityBase implements EntityDispl
    */
   protected function getLogger() {
     return \Drupal::logger('system');
+  }
+
+  /**
+   * Finds component handler by element name.
+   *
+   * @param string $name
+   *   The element name.
+   *
+   * @return \Drupal\Core\Entity\DisplayComponentHandlerInterface
+   */
+  public function getComponentHandlerByElementName($name) {
+    if (!isset($this->handlers[$name])) {
+      $handlers = $this->handlerManager->getDefinitions();
+      foreach (array_keys($handlers) as $type) {
+        $handler = $this->getComponentHandler($type);
+        if ($handler && $handler->hasElement($name)) {
+          break;
+        }
+        $handler = NULL;
+      }
+      $this->handlers[$name] = $handler;
+    }
+
+    return $this->handlers[$name];
+  }
+
+  /**
+   * Instantiates component handler.
+   *
+   * @param string $type
+   *   The type of component handler (field, extra_field).
+   *
+   * @return \Drupal\Core\Entity\DisplayComponentHandlerInterface
+   */
+  public function getComponentHandler($type) {
+    $handler = $this->handlerManager->getInstance(array('type' => $type));
+    if ($handler) {
+      $handler->setContext(array(
+        'entity_type' => $this->targetEntityType,
+        'bundle' => $this->bundle,
+        'mode' => $this->originalMode,
+        'display_context' => $this->displayContext,
+      ));
+    }
+    return $handler;
+  }
+
+  /**+
+   * {@inheritdoc}
+   */
+  public function getRenderer($name) {
+    if (!isset($this->content[$name])) {
+      return NULL;
+    }
+
+    if (!array_key_exists($name, $this->renderers)) {
+      if ($handler = $this->getComponentHandlerByElementName($name)) {
+        $options = $this->getComponent($name);
+        $this->renderers[$name] = $handler->getRenderer($name, $options);
+      }
+      else {
+        $this->renderers[$name] = NULL;
+      }
+    }
+    return $this->renderers[$name];
   }
 
 }

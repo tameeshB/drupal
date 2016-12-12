@@ -464,6 +464,12 @@ class EntityViewBuilder extends EntityHandlerBase implements EntityHandlerInterf
       $bundle = $entity->bundle();
       $key = $entity_type_id . ':' . $bundle . ':' . $field_name . ':' . hash('crc32b', serialize($display_options));
       if (!isset($this->singleFieldDisplays[$key])) {
+
+        $definitions = $this->entityManager->getBaseFieldDefinitions($entity_type_id);
+        if (isset($definitions[$field_name])) {
+          $display_options = \Drupal::service('plugin.manager.field.formatter')->prepareConfiguration($definitions[$field_name]->getType(), $display_options);
+        }
+
         $this->singleFieldDisplays[$key] = EntityViewDisplay::create(array(
           'targetEntityType' => $entity_type_id,
           'bundle' => $bundle,

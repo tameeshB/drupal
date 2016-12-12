@@ -2017,5 +2017,20 @@ function hook_entity_extra_field_info_alter(&$info) {
 }
 
 /**
+ * Modify the list of available component handler plugins.
+ *
+ * This hook may be used to modify plugin properties after they have been
+ * specified by other modules.
+ *
+ * @param $plugins
+ *   An array of all the existing plugin definitions, passed by reference.
+ *
+ * @see DisplayComponentHandlerPluginManager
+ */
+function hook_display_component_handler_info_alter(array &$plugins) {
+  $plugins['someplugin']['label'] = t('Better name');
+}
+
+/**
  * @} End of "addtogroup hooks".
  */

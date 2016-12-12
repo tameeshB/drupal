@@ -1,0 +1,776 @@
+diff --git a/core/core.services.yml b/core/core.services.yml
+index 5b0de75783..90f41bd2ee 100644
+--- a/core/core.services.yml
++++ b/core/core.services.yml
+@@ -1656,4 +1656,6 @@ services:
+   response_filter.rss.relative_url:
+     class: Drupal\Core\EventSubscriber\RssResponseRelativeUrlFilter
+     tags:
+-      - { name: event_subscriber }
++  plugin.manager.entity.display_component_handler:
++    class: Drupal\Core\Entity\DisplayComponentHandlerPluginManager
++    parent: default_plugin_manager
+diff --git a/core/lib/Drupal/Core/Entity/Annotation/DisplayComponent.php b/core/lib/Drupal/Core/Entity/Annotation/DisplayComponent.php
+new file mode 100644
+index 0000000000..9bd43281be
+--- /dev/null
++++ b/core/lib/Drupal/Core/Entity/Annotation/DisplayComponent.php
+@@ -0,0 +1,21 @@
++<?php
++
++namespace Drupal\Core\Entity\Annotation;
++
++use Drupal\Component\Annotation\Plugin;
++
++/**
++ * Defines a DisplayComponent annotation object.
++ *
++ * @Annotation
++ */
++class DisplayComponent extends Plugin {
++
++  /**
++   * The plugin ID.
++   *
++   * @var string
++   */
++  public $id;
++
++}
+diff --git a/core/lib/Drupal/Core/Entity/DisplayComponentHandlerBase.php b/core/lib/Drupal/Core/Entity/DisplayComponentHandlerBase.php
+new file mode 100644
+index 0000000000..2e79113dd0
+--- /dev/null
++++ b/core/lib/Drupal/Core/Entity/DisplayComponentHandlerBase.php
+@@ -0,0 +1,59 @@
++<?php
++
++namespace Drupal\Core\Entity;
++
++use Drupal\Component\Plugin\PluginBase;
++
++/**
++ * Provides a base class for DisplayComponentHandler plugins.
++ */
++abstract class DisplayComponentHandlerBase extends PluginBase implements DisplayComponentHandlerInterface {
++
++  /**
++   * The context in which the handler is being used.
++   *
++   * @var array
++   */
++  protected $context;
++
++  /**
++   * {@inheritdoc}
++   */
++  public function setContext(array $context) {
++    $this->context = $context;
++  }
++
++  /**
++   * {@inheritdoc}
++   */
++  public function prepareDisplayComponents(array &$components, array &$hidden_components) {
++  }
++
++  /**
++   * {@inheritdoc}
++   */
++  public function hasElement($name) {
++    return FALSE;
++  }
++
++  /**
++   * {@inheritdoc}
++   */
++  public function massageIn($name, array $options) {
++    return $options;
++  }
++
++  /**
++   * {@inheritdoc}
++   */
++  public function massageOut($properties) {
++    return $properties;
++  }
++
++  /**
++   * {@inheritdoc}
++   */
++  public function getRenderer($name, array $options) {
++  }
++
++}
+diff --git a/core/lib/Drupal/Core/Entity/DisplayComponentHandlerInterface.php b/core/lib/Drupal/Core/Entity/DisplayComponentHandlerInterface.php
+new file mode 100644
+index 0000000000..50be9ec299
+--- /dev/null
++++ b/core/lib/Drupal/Core/Entity/DisplayComponentHandlerInterface.php
+@@ -0,0 +1,83 @@
++<?php
++
++namespace Drupal\Core\Entity;
++
++/**
++ * Provides a base class for DisplayComponent plugins.
++ */
++interface DisplayComponentHandlerInterface {
++
++  /**
++   * Checks if the component handler should process the passed component.
++   *
++   * @param string $name
++   *   The name of a display component.
++   *
++   * @return bool
++   *   TRUE if the display component handler provides the component.
++   */
++  public function hasElement($name);
++
++  /**
++   * Prepares the options before they are stored.
++   *
++   * @param string $name
++   *   The name of a display component.
++   * @param array $options
++   *   The default options for this component.
++   *
++   * @return array
++   *   Massaged component options.
++   */
++  public function massageIn($name, array $options);
++
++  /**
++   * Sets the context for the rendering component.
++   *
++   * @param array $context
++   *   A keyed array containing the current entity display context. The
++   *   following parameters should be set:
++   *   - entity_type: The type of entity.
++   *   - bundle: The entity bundle.
++   *   - view_mode: The entity view mode (default, full).
++   *   - display_context: The type of the display to use (view or form).
++   */
++  public function setContext(array $context);
++
++  /**
++   * Returns the render plugin for the display component.
++   *
++   * @param string $name
++   *   The name of a display component.
++   * @param array $options
++   *   An array of configuration options to instantiate the render plugin.
++   *
++   * @return mixed
++   *   The object to render the component or null.
++   */
++  public function getRenderer($name, array $options);
++
++  /**
++   * Prepares components when the display gets created.
++   *
++   * @param array $components
++   *   The visible display components, passed by reference.
++   * @param array $hidden_components
++   *   The hidden display components, passed by reference.
++   */
++  public function prepareDisplayComponents(array &$components, array &$hidden_components);
++
++  /**
++   * Prepares the display options after they are retrieved from the storage.
++   *
++   * @param array $properties
++   *   The entity display properties.
++   *
++   * return @array
++   *   An associative array of the display components with following keys:
++   *   - content: Configured components to render.
++   *   - hidden: Configured components to hide from render.
++   */
++  public function massageOut($properties);
++
++}
+diff --git a/core/lib/Drupal/Core/Entity/DisplayComponentHandlerPluginManager.php b/core/lib/Drupal/Core/Entity/DisplayComponentHandlerPluginManager.php
+new file mode 100644
+index 0000000000..527bb9ebe6
+--- /dev/null
++++ b/core/lib/Drupal/Core/Entity/DisplayComponentHandlerPluginManager.php
+@@ -0,0 +1,56 @@
++<?php
++
++namespace Drupal\Core\Entity;
++
++use Drupal\Core\Cache\CacheBackendInterface;
++use Drupal\Core\Extension\ModuleHandlerInterface;
++use Drupal\Core\Plugin\DefaultPluginManager;
++
++/**
++ * Manages entity display component handlers.
++ *
++ * The handlers are typically shared for the whole request. getInstance() holds
++ * the instantiated plugins and only instantiates one of each type.
++ *
++ * @see hook_display_component_handler_info_alter()
++ */
++class DisplayComponentHandlerPluginManager extends DefaultPluginManager {
++
++  /**
++   * The handlers that have already been instantiated by getInstance().
++   *
++   * @var array
++   */
++  protected $plugins = array();
++
++  /**
++   * Constructs a DisplayComponentHandlerPluginManager object.
++   *
++   * @param \Traversable $namespaces
++   *   An object that implements \Traversable which contains the root paths
++   *   keyed by the corresponding namespace to look for plugin implementations.
++   * @param \Drupal\Core\Cache\CacheBackendInterface $cache_backend
++   *   Cache backend instance to use.
++   * @param \Drupal\Core\Extension\ModuleHandlerInterface $module_handler
++   *   The module handler to invoke the alter hook with.
++   */
++  public function __construct(\Traversable $namespaces, CacheBackendInterface $cache_backend, ModuleHandlerInterface $module_handler) {
++    parent::__construct('Plugin/DisplayComponent', $namespaces, $module_handler, 'Drupal\Core\Entity\DisplayComponentHandlerInterface' , 'Drupal\Core\Entity\Annotation\DisplayComponent');
++    $this->alterInfo('display_component_handler_info');
++    $this->setCacheBackend($cache_backend, 'display_component_handlers');
++  }
++
++  /**
++   * {@inheritdoc}
++   */
++  public function getInstance(array $options) {
++    $plugin_id = $options['type'];
++
++    if (!isset($this->plugins[$plugin_id]) && !array_key_exists($plugin_id, $this->plugins)) {
++      $this->plugins[$plugin_id] = $this->getDiscovery()->getDefinition($plugin_id) ? $this->createInstance($plugin_id) : NULL;
++    }
++
++    return $this->plugins[$plugin_id];
++  }
++
++}
+diff --git a/core/lib/Drupal/Core/Entity/Entity/EntityFormDisplay.php b/core/lib/Drupal/Core/Entity/Entity/EntityFormDisplay.php
+index cd90ecce05..744deb7d5d 100644
+--- a/core/lib/Drupal/Core/Entity/Entity/EntityFormDisplay.php
++++ b/core/lib/Drupal/Core/Entity/Entity/EntityFormDisplay.php
+@@ -129,33 +129,6 @@ public function __construct(array $values, $entity_type) {
+   /**
+    * {@inheritdoc}
+    */
+-  public function getRenderer($field_name) {
+-    if (isset($this->plugins[$field_name])) {
+-      return $this->plugins[$field_name];
+-    }
+-
+-    // Instantiate the widget object from the stored display properties.
+-    if (($configuration = $this->getComponent($field_name)) && isset($configuration['type']) && ($definition = $this->getFieldDefinition($field_name))) {
+-      $widget = $this->pluginManager->getInstance(array(
+-        'field_definition' => $definition,
+-        'form_mode' => $this->originalMode,
+-        // No need to prepare, defaults have been merged in setComponent().
+-        'prepare' => FALSE,
+-        'configuration' => $configuration
+-      ));
+-    }
+-    else {
+-      $widget = NULL;
+-    }
+-
+-    // Persist the widget object.
+-    $this->plugins[$field_name] = $widget;
+-    return $widget;
+-  }
+-
+-  /**
+-   * {@inheritdoc}
+-   */
+   public function buildForm(FieldableEntityInterface $entity, array &$form, FormStateInterface $form_state) {
+     // Set #parents to 'top-level' by default.
+     $form += array('#parents' => array());
+diff --git a/core/lib/Drupal/Core/Entity/EntityDisplayBase.php b/core/lib/Drupal/Core/Entity/EntityDisplayBase.php
+index eb93748cec..66b5db90e5 100644
+--- a/core/lib/Drupal/Core/Entity/EntityDisplayBase.php
++++ b/core/lib/Drupal/Core/Entity/EntityDisplayBase.php
+@@ -79,6 +79,11 @@
+   protected $hidden = array();
+ 
+   /**
++   * The renderer objects used for this display, keyed by component name.
++   */
++  protected $renderers = array();
++
++  /**
+    * The original view or form mode that was requested (case of view/form modes
+    * being configured to fall back to the 'default' display).
+    *
+@@ -115,6 +120,18 @@
+   protected $renderer;
+ 
+   /**
++   * A mapping of display elements and its corresponding handler.
++   */
++  protected $handlers;
++
++  /**
++   * The display component handler plugin manager.
++   *
++   * @var \Drupal\Core\Entity\DisplayComponentHandlerPluginManager
++   */
++  protected $handlerManager;
++
++  /**
+    * {@inheritdoc}
+    */
+   public function __construct(array $values, $entity_type) {
+@@ -138,6 +155,8 @@ public function __construct(array $values, $entity_type) {
+ 
+     parent::__construct($values, $entity_type);
+ 
++    $this->handlerManager = \Drupal::service('plugin.manager.entity.display_component_handler');
++
+     $this->originalMode = $this->mode;
+ 
+     $this->init();
+@@ -321,13 +340,14 @@ public function calculateDependencies() {
+    */
+   public function toArray() {
+     $properties = parent::toArray();
+-    // Do not store options for fields whose display is not set to be
+-    // configurable.
+-    foreach ($this->getFieldDefinitions() as $field_name => $definition) {
+-      if (!$definition->isDisplayConfigurable($this->displayContext)) {
+-        unset($properties['content'][$field_name]);
+-        unset($properties['hidden'][$field_name]);
+-      }
++
++    // Let the component handlers add missing components.
++    if (!$this->handlerManager) {
++      $this->handlerManager = \Drupal::service('plugin.manager.entity.display_component_handler');
++    }
++    $handlers = $this->handlerManager->getDefinitions();
++    foreach (array_keys($handlers) as $type) {
++      $properties = $this->getComponentHandler($type)->massageOut($properties);
+     }
+ 
+     return $properties;
+@@ -366,16 +386,20 @@ public function setComponent($name, array $options = array()) {
+       $options['weight'] = isset($max) ? $max + 1 : 0;
+     }
+ 
+-    // For a field, fill in default options.
+-    if ($field_definition = $this->getFieldDefinition($name)) {
+-      $options = $this->pluginManager->prepareConfiguration($field_definition->getType(), $options);
++    // Massage in some values.
++    $handler = $this->getComponentHandlerByElementName($name);
++    if ($handler) {
++      $options = $handler->massageIn($name, $options);
+     }
+ 
+     // Ensure we always have an empty settings and array.
+     $options += ['settings' => [], 'third_party_settings' => []];
+ 
+     $this->content[$name] = $options;
++
++    // Unset these to ensure new settings are picked up.
+     unset($this->hidden[$name]);
++    unset($this->renderers[$name]);
+     unset($this->plugins[$name]);
+ 
+     return $this;
+@@ -595,4 +619,69 @@ protected function getLogger() {
+     return \Drupal::logger('system');
+   }
+ 
++  /**
++   * Finds component handler by element name.
++   *
++   * @param string $name
++   *   The element name.
++   *
++   * @return \Drupal\Core\Entity\DisplayComponentHandlerInterface
++   */
++  public function getComponentHandlerByElementName($name) {
++    if (!isset($this->handlers[$name])) {
++      $handlers = $this->handlerManager->getDefinitions();
++      foreach (array_keys($handlers) as $type) {
++        $handler = $this->getComponentHandler($type);
++        if ($handler && $handler->hasElement($name)) {
++          break;
++        }
++        $handler = NULL;
++      }
++      $this->handlers[$name] = $handler;
++    }
++
++    return $this->handlers[$name];
++  }
++
++  /**
++   * Instantiates component handler.
++   *
++   * @param string $type
++   *   The type of component handler (field, extra_field).
++   *
++   * @return \Drupal\Core\Entity\DisplayComponentHandlerInterface
++   */
++  public function getComponentHandler($type) {
++    $handler = $this->handlerManager->getInstance(array('type' => $type));
++    if ($handler) {
++      $handler->setContext(array(
++        'entity_type' => $this->targetEntityType,
++        'bundle' => $this->bundle,
++        'mode' => $this->originalMode,
++        'display_context' => $this->displayContext,
++      ));
++    }
++    return $handler;
++  }
++
++  /**+
++   * {@inheritdoc}
++   */
++  public function getRenderer($name) {
++    if (!isset($this->content[$name])) {
++      return NULL;
++    }
++
++    if (!array_key_exists($name, $this->renderers)) {
++      if ($handler = $this->getComponentHandlerByElementName($name)) {
++        $options = $this->getComponent($name);
++        $this->renderers[$name] = $handler->getRenderer($name, $options);
++      }
++      else {
++        $this->renderers[$name] = NULL;
++      }
++    }
++    return $this->renderers[$name];
++  }
++
+ }
+diff --git a/core/lib/Drupal/Core/Entity/EntityViewBuilder.php b/core/lib/Drupal/Core/Entity/EntityViewBuilder.php
+index 7097b85df3..0cf5a89f73 100644
+--- a/core/lib/Drupal/Core/Entity/EntityViewBuilder.php
++++ b/core/lib/Drupal/Core/Entity/EntityViewBuilder.php
+@@ -464,6 +464,12 @@ protected function getSingleFieldDisplay($entity, $field_name, $display_options)
+       $bundle = $entity->bundle();
+       $key = $entity_type_id . ':' . $bundle . ':' . $field_name . ':' . hash('crc32b', serialize($display_options));
+       if (!isset($this->singleFieldDisplays[$key])) {
++
++        $definitions = $this->entityManager->getBaseFieldDefinitions($entity_type_id);
++        if (isset($definitions[$field_name])) {
++          $display_options = \Drupal::service('plugin.manager.field.formatter')->prepareConfiguration($definitions[$field_name]->getType(), $display_options);
++        }
++
+         $this->singleFieldDisplays[$key] = EntityViewDisplay::create(array(
+           'targetEntityType' => $entity_type_id,
+           'bundle' => $bundle,
+diff --git a/core/lib/Drupal/Core/Entity/Plugin/DisplayComponent/ExtraFieldDisplayComponentHandler.php b/core/lib/Drupal/Core/Entity/Plugin/DisplayComponent/ExtraFieldDisplayComponentHandler.php
+new file mode 100644
+index 0000000000..755e377676
+--- /dev/null
++++ b/core/lib/Drupal/Core/Entity/Plugin/DisplayComponent/ExtraFieldDisplayComponentHandler.php
+@@ -0,0 +1,54 @@
++<?php
++
++namespace Drupal\Core\Entity\Plugin\DisplayComponent;
++
++use Drupal\Core\Entity\DisplayComponentHandlerBase;
++
++/**
++ * Provides a component handler to manage entity extra fields.
++ *
++ * @DisplayComponent(
++ *   id = "extra_field"
++ * )
++ */
++class ExtraFieldDisplayComponentHandler extends DisplayComponentHandlerBase {
++
++  /**
++   * {@inheritdoc}
++   */
++  public function prepareDisplayComponents(array &$components, array &$hidden_components) {
++    // Fill in defaults for extra fields.
++    $extra_fields = $this->fetchExtraFields();
++    foreach ($extra_fields as $name => $definition) {
++      if (!isset($components[$name]) && !isset($hidden_components[$name])) {
++        // Extra fields are visible by default unless they explicitly say so.
++        if (!isset($definition['visible']) || $definition['visible'] == TRUE) {
++          $components[$name] = array(
++            'weight' => $definition['weight']
++          );
++        }
++        else {
++          $hidden_components[$name] = TRUE;
++        }
++      }
++    }
++  }
++
++  /**
++   * {@inheritdoc}
++   */
++  public function hasElement($name) {
++    $extra_fields = $this->fetchExtraFields();
++    return isset($extra_fields[$name]);
++  }
++
++  /**
++   * Fetches all the extra fields.
++   */
++  protected function fetchExtraFields() {
++    $context = $this->context['display_context'] == 'view' ? 'display' : $this->context['display_context'];
++    $extra_fields = \Drupal::entityManager()->getExtraFields($this->context['entity_type'], $this->context['bundle']);
++    return isset($extra_fields[$context]) ? $extra_fields[$context] : array();
++  }
++
++}
+diff --git a/core/lib/Drupal/Core/Entity/Plugin/DisplayComponent/FieldDisplayComponentHandler.php b/core/lib/Drupal/Core/Entity/Plugin/DisplayComponent/FieldDisplayComponentHandler.php
+new file mode 100644
+index 0000000000..df029d95a8
+--- /dev/null
++++ b/core/lib/Drupal/Core/Entity/Plugin/DisplayComponent/FieldDisplayComponentHandler.php
+@@ -0,0 +1,198 @@
++<?php
++
++namespace Drupal\Core\Entity\Plugin\DisplayComponent;
++
++use Drupal\Core\Entity\EntityManagerInterface;
++use Drupal\Core\Field\FieldDefinitionInterface;
++use Drupal\Core\Field\FormatterPluginManager;
++use Drupal\Core\Field\WidgetPluginManager;
++use Drupal\Core\Plugin\ContainerFactoryPluginInterface;
++use Drupal\Core\Entity\DisplayComponentHandlerBase;
++use Symfony\Component\DependencyInjection\ContainerInterface;
++
++/**
++ * Provides a component handler to manage entity fields.
++ *
++ * @DisplayComponent(
++ *   id = "field"
++ * )
++ */
++class FieldDisplayComponentHandler extends DisplayComponentHandlerBase implements ContainerFactoryPluginInterface {
++
++  /**
++   * The field formatter plugin manager.
++   *
++   * @var \Drupal\Core\Field\FormatterPluginManager
++   */
++  protected $formatterPluginManager;
++
++  /**
++   * The field widget plugin manager.
++   *
++   * @var \Drupal\Core\Field\WidgetPluginManager
++   */
++  protected $widgetPluginManager;
++
++  /**
++   * The entity manager.
++   *
++   * @var \Drupal\Core\Entity\EntityManagerInterface
++   */
++  protected $entityManager;
++
++
++  /**
++   * Constructs a FieldDisplayComponentHandler object.
++   *
++   * @param array $configuration
++   *   A configuration array containing information about the plugin instance.
++   * @param string $plugin_id
++   *   The plugin ID for the plugin instance.
++   * @param array $plugin_definition
++   *   The plugin implementation definition.
++   * @param \Drupal\Core\Field\FormatterPluginManager $formatter_plugin_manager
++   *   The field formatter plugin manager.
++   * @param \Drupal\Core\Field\WidgetPluginManager $widget_plugin_manager
++   *   The field widget plugin manager.
++   */
++  public function __construct(array $configuration, $plugin_id, array $plugin_definition, FormatterPluginManager $formatter_plugin_manager, WidgetPluginManager $widget_plugin_manager, EntityManagerInterface $entity_manager) {
++    parent::__construct($configuration, $plugin_id, $plugin_definition);
++
++    $this->formatterPluginManager = $formatter_plugin_manager;
++    $this->widgetPluginManager = $widget_plugin_manager;
++    $this->entityManager = $entity_manager;
++  }
++
++  /**
++   * {@inheritdoc}
++   */
++  public static function create(ContainerInterface $container, array $configuration, $plugin_id, $plugin_definition) {
++    return new static($configuration, $plugin_id, $plugin_definition,
++      $container->get('plugin.manager.field.formatter'),
++      $container->get('plugin.manager.field.widget'),
++      $container->get('entity.manager')
++    );
++  }
++
++  /**
++   * {@inheritdoc}
++   */
++  public function massageIn($name, array $options) {
++    $field_definition = $this->getFieldDefinition($name);
++    if (!isset($field_definition)) {
++      // The field in process of removal from display.
++      return $options;
++    }
++    if ($this->context['display_context'] == 'view') {
++      return $this->formatterPluginManager->prepareConfiguration($field_definition->getType(), $options);
++    }
++    else {
++      return $this->widgetPluginManager->prepareConfiguration($field_definition->getType(), $options);
++    }
++  }
++
++  /**
++   * {@inheritdoc}
++   */
++  public function massageOut($properties) {
++    // Do not store options for fields whose display is not set to be
++    // configurable.
++    foreach ($this->getDisplayableFields() as $field_name => $definition) {
++      if (!$definition->isDisplayConfigurable($this->context['display_context'])) {
++        unset($properties['content'][$field_name]);
++        unset($properties['hidden'][$field_name]);
++      }
++    }
++
++    return $properties;
++  }
++
++  /**
++   * {@inheritdoc}
++   */
++  public function prepareDisplayComponents(array &$components, array &$hidden_components) {
++    if ($this->context['display_context'] == 'view') {
++      $plugin_manager = $this->formatterPluginManager;
++    }
++    else {
++      $plugin_manager = $this->widgetPluginManager;
++    }
++
++    // Fill in defaults for fields.
++    $fields = $this->getDisplayableFields();
++    foreach ($fields as $name => $definition) {
++      if (!$definition->isDisplayConfigurable($this->context['display_context']) || (!isset($components[$name]) && !isset($hidden_components[$name]))) {
++        $options = $definition->getDisplayOptions($this->context['display_context']);
++
++        if (!empty($options['type']) && $options['type'] == 'hidden') {
++          $hidden_components[$name] = TRUE;
++        }
++        elseif ($options) {
++          $components[$name] = $plugin_manager->prepareConfiguration($definition->getType(), $options);
++        }
++        // Note: (base) fields that do not specify display options are not
++        // tracked in the display at all, in order to avoid cluttering the
++        // configuration that gets saved back.
++      }
++    }
++  }
++
++  /**
++   * {@inheritdoc}
++   */
++  public function getRenderer($name, array $options) {
++    if (isset($options['type']) && ($definition = $this->getFieldDefinition($name))) {
++      if ($this->context['display_context'] == 'view') {
++        $plugin_manager = $this->formatterPluginManager;
++        $mode_key = 'view_mode';
++      }
++      else {
++        $plugin_manager = $this->widgetPluginManager;
++        $mode_key = 'form_mode';
++      }
++
++      return $plugin_manager->getInstance(array(
++        'field_definition' => $definition,
++        $mode_key => $this->context['mode'],
++        // No need to prepare, defaults have been merged when the options were
++        // written in the display.
++        'prepare' => FALSE,
++        'configuration' => $options,
++      ));
++    }
++    return NULL;
++  }
++
++  /**
++   * {@inheritdoc}
++   */
++  public function hasElement($name) {
++    $field_definition = $this->getFieldDefinition($name);
++    return isset($field_definition);
++  }
++
++  /**
++   * Returns the field definition of a field.
++   */
++  protected function getFieldDefinition($field_name) {
++    $definitions = $this->getDisplayableFields();
++    return isset($definitions[$field_name]) ? $definitions[$field_name] : NULL;
++  }
++
++  /**
++   * Returns the definitions of the fields that are candidate for display.
++   */
++  protected function getDisplayableFields() {
++    $entity_type = $this->context['entity_type'];
++    $bundle = $this->context['bundle'];
++    $display_context = $this->context['display_context'];
++    $definitions = $this->entityManager->getFieldDefinitions($entity_type, $bundle);
++
++    // The display only cares about fields that specify display options.
++    // Discard base fields that are not rendered through formatters / widgets.
++    return array_filter($definitions, function (FieldDefinitionInterface $definition) use ($display_context) {
++      return $definition->getDisplayOptions($display_context);
++    });
++  }
++
++}
+diff --git a/core/lib/Drupal/Core/Entity/entity.api.php b/core/lib/Drupal/Core/Entity/entity.api.php
+index 9f6ef8b890..bda7740ba0 100644
+--- a/core/lib/Drupal/Core/Entity/entity.api.php
++++ b/core/lib/Drupal/Core/Entity/entity.api.php
+@@ -2017,5 +2017,20 @@ function hook_entity_extra_field_info_alter(&$info) {
+ }
+ 
+ /**
++ * Modify the list of available component handler plugins.
++ *
++ * This hook may be used to modify plugin properties after they have been
++ * specified by other modules.
++ *
++ * @param $plugins
++ *   An array of all the existing plugin definitions, passed by reference.
++ *
++ * @see DisplayComponentHandlerPluginManager
++ */
++function hook_display_component_handler_info_alter(array &$plugins) {
++  $plugins['someplugin']['label'] = t('Better name');
++}
++
++/**
+  * @} End of "addtogroup hooks".
+  */
+diff --git a/core/lib/Drupal/Core/Field/FormatterPluginManager.php b/core/lib/Drupal/Core/Field/FormatterPluginManager.php
+index ca9bd06871..65e1d3a401 100644
+--- a/core/lib/Drupal/Core/Field/FormatterPluginManager.php
++++ b/core/lib/Drupal/Core/Field/FormatterPluginManager.php
+@@ -56,6 +56,12 @@ public function createInstance($plugin_id, array $configuration = array()) {
+     $plugin_definition = $this->getDefinition($plugin_id);
+     $plugin_class = DefaultFactory::getPluginClass($plugin_id, $plugin_definition);
+ 
++    // @TODO, is this missing somewhere else?
++    if (!isset($configuration['label'])) {
++      $configuration['label'] = '';
++      assert(FALSE, sprintf('The %s does not have a label', $plugin_id));
++    }
++
+     // @todo This is copied from \Drupal\Core\Plugin\Factory\ContainerFactory.
+     //   Find a way to restore sanity to
+     //   \Drupal\Core\Field\FormatterBase::__construct().
