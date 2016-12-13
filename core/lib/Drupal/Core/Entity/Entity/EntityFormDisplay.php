@@ -129,33 +129,6 @@ class EntityFormDisplay extends EntityDisplayBase implements EntityFormDisplayIn
   /**
    * {@inheritdoc}
    */
-  public function getRenderer($field_name) {
-    if (isset($this->plugins[$field_name])) {
-      return $this->plugins[$field_name];
-    }
-
-    // Instantiate the widget object from the stored display properties.
-    if (($configuration = $this->getComponent($field_name)) && isset($configuration['type']) && ($definition = $this->getFieldDefinition($field_name))) {
-      $widget = $this->pluginManager->getInstance(array(
-        'field_definition' => $definition,
-        'form_mode' => $this->originalMode,
-        // No need to prepare, defaults have been merged in setComponent().
-        'prepare' => FALSE,
-        'configuration' => $configuration
-      ));
-    }
-    else {
-      $widget = NULL;
-    }
-
-    // Persist the widget object.
-    $this->plugins[$field_name] = $widget;
-    return $widget;
-  }
-
-  /**
-   * {@inheritdoc}
-   */
   public function buildForm(FieldableEntityInterface $entity, array &$form, FormStateInterface $form_state) {
     // Set #parents to 'top-level' by default.
     $form += array('#parents' => array());

@@ -56,6 +56,12 @@ class FormatterPluginManager extends DefaultPluginManager {
     $plugin_definition = $this->getDefinition($plugin_id);
     $plugin_class = DefaultFactory::getPluginClass($plugin_id, $plugin_definition);
 
+    // @TODO, is this missing somewhere else?
+    if (!isset($configuration['label'])) {
+      $configuration['label'] = '';
+      assert(FALSE, sprintf('The %s does not have a label', $plugin_id));
+    }
+
     // @todo This is copied from \Drupal\Core\Plugin\Factory\ContainerFactory.
     //   Find a way to restore sanity to
     //   \Drupal\Core\Field\FormatterBase::__construct().

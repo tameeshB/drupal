@@ -1656,4 +1656,6 @@ services:
   response_filter.rss.relative_url:
     class: Drupal\Core\EventSubscriber\RssResponseRelativeUrlFilter
     tags:
-      - { name: event_subscriber }
+  plugin.manager.entity.display_component_handler:
+    class: Drupal\Core\Entity\DisplayComponentHandlerPluginManager
+    parent: default_plugin_manager
