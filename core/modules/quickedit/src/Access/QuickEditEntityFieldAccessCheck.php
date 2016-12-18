@@ -8,9 +8,9 @@ use Drupal\Core\Session\AccountInterface;
 use Drupal\Core\Entity\EntityInterface;
 
 /**
- * Access check for editing entity fields.
+ * Access check for in-place editing entity fields.
  */
-class EditEntityFieldAccessCheck implements AccessInterface, EditEntityFieldAccessCheckInterface {
+class QuickEditEntityFieldAccessCheck implements AccessInterface, QuickEditEntityFieldAccessCheckInterface {
 
   /**
    * Checks Quick Edit access to the field.

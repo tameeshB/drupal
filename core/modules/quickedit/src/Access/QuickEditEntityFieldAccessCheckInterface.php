@@ -5,9 +5,9 @@ namespace Drupal\quickedit\Access;
 use Drupal\Core\Entity\EntityInterface;
 
 /**
- * Access check for editing entity fields.
+ * Access check for in-place editing entity fields.
  */
-interface EditEntityFieldAccessCheckInterface {
+interface QuickEditEntityFieldAccessCheckInterface {
 
   /**
    * Checks access to edit the requested field of the requested entity.

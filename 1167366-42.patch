@@ -1,0 +1,79 @@
+diff --git a/core/themes/bartik/color/preview.html b/core/themes/bartik/color/preview.html
+index 7031b08945..113f137c9d 100644
+--- a/core/themes/bartik/color/preview.html
++++ b/core/themes/bartik/color/preview.html
+@@ -5,9 +5,9 @@
+     <div class="color-preview-site-name">Bartik</div>
+     <div class="color-preview-main-menu">
+       <ul class="color-preview-main-menu-links">
+-        <li><a>Home</a></li>
+-        <li><a>Te Quidne</a></li>
+-        <li><a>Vel Torqueo Quae Erat</a></li>
++        <li><a>The first tab</a></li>
++        <li><a>Another tab</a></li>
++        <li><a>The last tab</a></li>
+       </ul>
+     </div>
+   </div>
+@@ -15,21 +15,22 @@
+   <div class="color-preview-main clearfix">
+     <div class="color-preview-sidebar">
+       <div class="color-preview-block preview-block">
+-        <h2>Etiam est risus</h2>
++        <h2>Example heading</h2>
+         <div class="preview-content">
+-          Maecenas id porttitor Ut enim ad minim veniam, quis nostrudfelis.
+-          Laboris nisi ut aliquip ex ea.
++          This is a block of example content. This content is here to demonstrate what actual content would look like
++          in the color scheme you configure.
+         </div>
+       </div>
+     </div>
+     <div class="color-preview-content">
+-      <h1 class="color-preview-page-title">Lorem ipsum dolor</h1>
++      <h1 class="color-preview-page-title">This is an example heading</h1>
+       <div class="color-preview-node">
+         <div class="preview-content">
+-          Sit amet, <a>consectetur adipisicing elit</a>, sed do eiusmod tempor
+-          incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis
+-          nostrud <a>exercitation ullamco</a> laboris nisi ut aliquip ex ea
+-          commodo consequat. Maecenas id porttitor Ut enim ad minim veniam, quis nostr udfelis.
++          This is a block of example content. This content is here to demonstrate what actual content would look like
++          in the color scheme you configure. <a>This is an example link</a>, is is here to demonstrate
++          how background colors you configure may affect the readability of links. This content is here to demonstrate
++          what actual content would look like in the color scheme you configure. <a>This is an example link</a>, is is here to demonstrate
++          how background colors you configure may affect the readability of links. This is a block of example content.
+         </div>
+       </div>
+     </div>
+@@ -39,22 +40,22 @@ <h1 class="color-preview-page-title">Lorem ipsum dolor</h1>
+     <div class="color-preview-footer-columns clearfix">
+       <div class="preview-footer-column">
+         <div class="preview-block">
+-          <h2>Etiam est risus</h2>
++          <h2>Example heading</h2>
+           <div class="content">
+-            Maecenas id porttitor Ut enim ad minim veniam, quis nostrudfelis.
+-            Laboris nisi ut aliquip ex ea.
++          This is a block of example content. This content is here to demonstrate what actual content would look like
++          in the color scheme you configure.
+           </div>
+         </div>
+       </div>
+       <div class="preview-footer-column">
+         <div class="preview-block preview-block-menu">
+-          <h2>Erisus dolor</h2>
++          <h2>Example heading</h2>
+           <div class="preview-content">
+             <ul>
+-              <li><a>Donec placerat</a></li>
+-              <li><a>Nullam nibh dolor</a></li>
+-              <li><a>Blandit sed</a></li>
+-              <li><a>Fermentum id</a></li>
++              <li><a>One footer link</a></li>
++              <li><a>Another footer link</a></li>
++              <li><a>A third footer link</a></li>
++              <li><a>The Last footer link</a></li>
+             </ul>
+           </div>
+         </div>

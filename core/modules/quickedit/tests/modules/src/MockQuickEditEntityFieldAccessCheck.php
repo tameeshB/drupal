@@ -3,12 +3,12 @@
 namespace Drupal\quickedit_test;
 
 use Drupal\Core\Entity\EntityInterface;
-use Drupal\quickedit\Access\EditEntityFieldAccessCheckInterface;
+use Drupal\quickedit\Access\QuickEditEntityFieldAccessCheckInterface;
 
 /**
  * Access check for editing entity fields.
  */
-class MockEditEntityFieldAccessCheck implements EditEntityFieldAccessCheckInterface {
+class MockQuickEditEntityFieldAccessCheck implements QuickEditEntityFieldAccessCheckInterface {
 
   /**
    * {@inheritdoc}
